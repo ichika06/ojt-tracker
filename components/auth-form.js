@@ -13,17 +13,26 @@ export default function AuthForm({ onAuthSuccess }) {
   const [password, setPassword] = useState("")
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
+  const [successMessage, setSuccessMessage] = useState("")
 
   const handleSubmit = async (e) => {
     e.preventDefault()
     setLoading(true)
     setError("")
+    setSuccessMessage("")
 
     const result = isLogin ? await signIn(email, password) : await signUp(email, password)
 
     if (result.error) {
       setError(result.error)
+    } else if (result.message) {
+      // For signup success with verification message
+      setSuccessMessage(result.message)
+      setEmail("")
+      setPassword("")
+      setIsLogin(true) // Switch to login form after successful signup
     } else {
+      // For successful login with verified email
       onAuthSuccess(result.user)
     }
 
@@ -42,6 +51,7 @@ export default function AuthForm({ onAuthSuccess }) {
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             {error && <div className="p-3 bg-red-100/60 border border-red-400/60 text-red-700 rounded backdrop-blur-sm">{error}</div>}
+            {successMessage && <div className="p-3 bg-green-100/60 border border-green-400/60 text-green-700 rounded backdrop-blur-sm">{successMessage}</div>}
 
             <div className="space-y-2">
               <Label htmlFor="email" className="text-gray-900 dark:text-white">

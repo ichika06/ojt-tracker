@@ -28,8 +28,14 @@ export default function TimeTracker() {
   const [useTimeInput, setUseTimeInput] = useState(false)
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChange((user) => {
-      setUser(user)
+    const unsubscribe = onAuthStateChange(async (user) => {
+      if (user && !user.emailVerified) {
+        // If user is logged in but email is not verified, sign them out
+        await logOut()
+        setUser(null)
+      } else {
+        setUser(user)
+      }
       setLoading(false)
     })
 
