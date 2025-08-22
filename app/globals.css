@@ -38,6 +38,30 @@
   -webkit-backdrop-filter: blur(4px);
 }
 
+/* Touch-friendly interactions */
+.touch-manipulation {
+  touch-action: manipulation;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.touch-pan-y {
+  touch-action: pan-y;
+}
+
+/* Active states for better touch feedback */
+.active\:scale-95:active {
+  transform: scale(0.95);
+}
+
+/* Responsive text sizing */
+@media (max-width: 640px) {
+  .text-responsive {
+    font-size: 0.875rem;
+  }
+}
+
 /* Smooth transitions for glass elements */
 .glass-transition {
   transition: all 0.3s ease-in-out;
