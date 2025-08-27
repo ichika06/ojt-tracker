@@ -1,5 +1,4 @@
 "use client"
-
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -20,17 +19,34 @@ export default function TimeTracker() {
   const [dailyLogs, setDailyLogs] = useState([])
   const [todayHours, setTodayHours] = useState("")
   const [timeNeededToRender, setTimeNeededToRender] = useState("")
-  const [currentMonth, setCurrentMonth] = useState(new Date())
-  const [selectedDate, setSelectedDate] = useState(new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Manila" }))
+  const [currentMonth, setCurrentMonth] = useState(() => {
+    const now = new Date()
+    const manilaTime = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Manila" }))
+    return manilaTime
+  })
+  const [selectedDate, setSelectedDate] = useState(() => {
+    const now = new Date()
+    return now.toLocaleDateString("en-CA", { timeZone: "Asia/Manila" })
+  })
   const [saving, setSaving] = useState(false)
   const [startTime, setStartTime] = useState("")
   const [endTime, setEndTime] = useState("")
   const [useTimeInput, setUseTimeInput] = useState(false)
+  const [isTimeModalOpen, setIsTimeModalOpen] = useState(false)
+
+  const getManilaDateString = () => {
+    const now = new Date()
+    return now.toLocaleDateString("en-CA", { timeZone: "Asia/Manila" })
+  }
+
+  const getManilaDate = () => {
+    const now = new Date()
+    return new Date(now.toLocaleString("en-US", { timeZone: "Asia/Manila" }))
+  }
 
   useEffect(() => {
     const unsubscribe = onAuthStateChange(async (user) => {
       if (user && !user.emailVerified) {
-        // If user is logged in but email is not verified, sign them out
         await logOut()
         setUser(null)
       } else {
@@ -38,7 +54,6 @@ export default function TimeTracker() {
       }
       setLoading(false)
     })
-
     return () => unsubscribe()
   }, [])
 
@@ -60,31 +75,22 @@ export default function TimeTracker() {
 
   useEffect(() => {
     if (user) {
-      // Subscribe to time logs
       const unsubscribeLogs = subscribeToTimeLogs(user.uid, (logs) => {
         setDailyLogs(logs)
-        // Also cache in localStorage for offline access
         localStorage.setItem(`timeTrackerLogs_${user.uid}`, JSON.stringify(logs))
       })
-
-      // Subscribe to user goal
       const unsubscribeGoal = subscribeToUserGoal(user.uid, (goal) => {
         setTotalGoal(goal)
-        // Also cache in localStorage for offline access
         localStorage.setItem(`timeTrackerGoal_${user.uid}`, goal.toString())
       })
-
-      // Load cached data immediately for faster initial load
       const cachedLogs = localStorage.getItem(`timeTrackerLogs_${user.uid}`)
       const cachedGoal = localStorage.getItem(`timeTrackerGoal_${user.uid}`)
-
       if (cachedLogs) {
         setDailyLogs(JSON.parse(cachedLogs))
       }
       if (cachedGoal) {
         setTotalGoal(Number.parseInt(cachedGoal))
       }
-
       return () => {
         unsubscribeLogs()
         unsubscribeGoal()
@@ -106,9 +112,7 @@ export default function TimeTracker() {
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-sky-100 via-blue-50 to-white dark:from-gray-900 dark:via-blue-900 dark:to-purple-900 flex items-center justify-center relative">
-        {/* Snowy effect for light mode only */}
         {!darkMode && <div className="snow-effect"></div>}
-        
         <div className="bg-white/30 dark:bg-black/30 backdrop-blur-xl border border-white/40 dark:border-white/20 rounded-2xl p-8 shadow-lg relative z-10">
           <div className="text-gray-900 dark:text-white text-lg font-medium">Loading...</div>
         </div>
@@ -120,7 +124,7 @@ export default function TimeTracker() {
     return <AuthForm onAuthSuccess={setUser} />
   }
 
-  const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Manila" })
+  const today = getManilaDateString()
   const totalHoursLogged = dailyLogs.reduce((sum, log) => sum + log.hours, 0)
   const remainingHours = Math.max(0, totalGoal - totalHoursLogged)
   const progressPercentage = (totalHoursLogged / totalGoal) * 100
@@ -129,31 +133,22 @@ export default function TimeTracker() {
     const hours = Number.parseFloat(todayHours)
     const neededHours = Number.parseFloat(timeNeededToRender)
     if (isNaN(hours) || hours <= 0) return
-
     setSaving(true)
-
-    // Prepare log data
-    // Only include neededHours if it's a valid number > 0
     const validNeededHours = !isNaN(neededHours) && neededHours > 0 ? neededHours : null
     const overtimeHours = validNeededHours ? Math.max(0, hours - validNeededHours) : 0
-
     const logData = {
       hours: hours,
       neededHours: validNeededHours,
-      timeNeeded: validNeededHours, // Add timeNeeded field for database
-      overtime: overtimeHours // Add overtime field for database
+      timeNeeded: validNeededHours,
+      overtime: overtimeHours
     }
-
-    // Save to Firestore (will trigger real-time update)
     const result = await saveTimeLog(user.uid, selectedDate, hours, logData)
-
     if (result.success) {
       setTodayHours("")
       setTimeNeededToRender("")
       console.log("[v0] Successfully saved time log to Firestore")
     } else {
       console.error("[v0] Failed to save time log:", result.error)
-      // Fallback to local storage if Firestore fails
       const existingLogIndex = dailyLogs.findIndex((log) => log.date === selectedDate)
       if (existingLogIndex >= 0) {
         const updatedLogs = [...dailyLogs]
@@ -165,14 +160,12 @@ export default function TimeTracker() {
       setTodayHours("")
       setTimeNeededToRender("")
     }
-
     setSaving(false)
   }
 
   const updateGoal = async (newGoal) => {
     const goalValue = Number.parseInt(newGoal) || 486
     setTotalGoal(goalValue)
-
     if (user) {
       await saveGoal(user.uid, goalValue)
       console.log("[v0] Successfully saved goal to Firestore")
@@ -181,22 +174,16 @@ export default function TimeTracker() {
 
   const calculateHoursFromTime = (start, end) => {
     if (!start || !end) return ""
-    
     const [startHour, startMin] = start.split(':').map(Number)
     const [endHour, endMin] = end.split(':').map(Number)
-    
     let startMinutes = startHour * 60 + startMin
     let endMinutes = endHour * 60 + endMin
-    
-    // Handle overnight shifts (end time is next day)
     if (endMinutes < startMinutes) {
       endMinutes += 24 * 60
     }
-    
     const diffMinutes = endMinutes - startMinutes
     const hours = diffMinutes / 60
-    
-    return hours.toFixed(1)
+    return Math.max(0, hours).toFixed(1)
   }
 
   const handleTimeChange = (type, value) => {
@@ -221,34 +208,30 @@ export default function TimeTracker() {
     const existingLog = dailyLogs.find((log) => log.date === dateStr)
     setTodayHours(existingLog ? existingLog.hours.toString() : "")
     setTimeNeededToRender(existingLog && existingLog.neededHours ? existingLog.neededHours.toString() : "")
-    // Reset time inputs when switching dates
     setStartTime("")
     setEndTime("")
-    setUseTimeInput(false)
   }
 
   const getCalendarDays = () => {
-    // Use Philippines timezone for calendar generation
-    const philippinesDate = new Date(currentMonth.toLocaleString("en-US", { timeZone: "Asia/Manila" }))
-    const year = philippinesDate.getFullYear()
-    const month = philippinesDate.getMonth()
+    const manilaMonth = new Date(currentMonth.toLocaleString("en-US", { timeZone: "Asia/Manila" }))
+    const year = manilaMonth.getFullYear()
+    const month = manilaMonth.getMonth()
     const firstDay = new Date(year, month, 1)
-    const lastDay = new Date(year, month + 1, 0)
     const startDate = new Date(firstDay)
     const dayOfWeek = firstDay.getDay()
     const mondayOffset = dayOfWeek === 0 ? 6 : dayOfWeek - 1
     startDate.setDate(startDate.getDate() - mondayOffset)
-
     const days = []
     const current = new Date(startDate)
-
     for (let i = 0; i < 42; i++) {
-      const dateStr = current.toLocaleDateString("en-CA", { timeZone: "Asia/Manila" })
+      const year = current.getFullYear()
+      const month = current.getMonth() + 1
+      const day = current.getDate()
+      const dateStr = `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`
       const log = dailyLogs.find((l) => l.date === dateStr)
-      const isCurrentMonth = current.getMonth() === month
+      const isCurrentMonth = current.getMonth() === manilaMonth.getMonth()
       const isToday = dateStr === today
       const isSelected = dateStr === selectedDate
-
       days.push({
         date: new Date(current),
         dateStr,
@@ -257,18 +240,16 @@ export default function TimeTracker() {
         isToday,
         isSelected,
       })
-
       current.setDate(current.getDate() + 1)
     }
-
     return days
   }
 
   const navigateMonth = (direction) => {
     setCurrentMonth((prev) => {
-      const newDate = new Date(prev)
-      newDate.setMonth(prev.getMonth() + (direction === "next" ? 1 : -1))
-      return newDate
+      const manilaDate = new Date(prev.toLocaleString("en-US", { timeZone: "Asia/Manila" }))
+      manilaDate.setMonth(manilaDate.getMonth() + (direction === "next" ? 1 : -1))
+      return manilaDate
     })
   }
 
@@ -278,39 +259,35 @@ export default function TimeTracker() {
   const formatSelectedDate = (dateStr) => {
     const isToday = dateStr === today
     if (isToday) return "Today"
-    
-    // Simple direct parsing without any calculations
     const [year, month, day] = dateStr.split('-').map(Number)
     const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-    
-    // Just display the month and day without weekday
     return `${months[month - 1]} ${day}`
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-sky-600 via-blue-500 to-white dark:from-gray-900 dark:via-blue-900 dark:to-purple-900 p-4 relative">
-      {/* Snowy effect for light mode only */}
+    <div className="min-h-screen bg-gradient-to-br from-sky-600 via-blue-500 to-white dark:from-gray-900 dark:via-blue-900 dark:to-purple-900 p-4 relative z-base">
       {!darkMode && <div className="snow-effect"></div>}
-      
-      <div className="max-w-6xl mx-auto space-y-6 relative z-10">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white/20 dark:bg-black/20 backdrop-blur-xl border border-white/30 dark:border-white/10 rounded-2xl p-4 sm:p-6 shadow-xl">
+      <div className="max-w-6xl mx-auto space-y-6 relative z-above">
+        {/* Header and Stats Cards */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white/20 dark:bg-black/20 backdrop-blur-xl border border-white/30 dark:border-white/10 rounded-2xl p-4 sm:p-6 shadow-xl relative z-above">
           <div className="text-center sm:text-left space-y-1 sm:space-y-2">
             <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white drop-shadow-sm">Time Tracker</h1>
             <p className="text-sm sm:text-base text-gray-700 dark:text-gray-300">Welcome back, {user.email.split('@')[0]}</p>
           </div>
           <div className="flex items-center justify-center sm:justify-end space-x-2">
-            <Button variant="outline" size="sm" onClick={toggleDarkMode} className="bg-white/30 dark:bg-black/30 backdrop-blur-sm border-white/40 dark:border-white/20 hover:bg-white/40 dark:hover:bg-black/40 text-gray-800 dark:text-white touch-manipulation active:scale-95">
+            <Button variant="outline" size="sm" onClick={toggleDarkMode} className="bg-white/30 dark:bg-black/30 backdrop-blur-sm border-white/40 dark:border-white/20 hover:bg-white/40 dark:hover:bg-black/40 text-gray-800 dark:text-white touch-manipulation active:scale-95 relative z-above">
               {darkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </Button>
-            <Button variant="outline" size="sm" onClick={handleSignOut} className="bg-white/30 dark:bg-black/30 backdrop-blur-sm border-white/40 dark:border-white/20 hover:bg-white/40 dark:hover:bg-black/40 text-gray-800 dark:text-white touch-manipulation active:scale-95">
+            <Button variant="outline" size="sm" onClick={handleSignOut} className="bg-white/30 dark:bg-black/30 backdrop-blur-sm border-white/40 dark:border-white/20 hover:bg-white/40 dark:hover:bg-black/40 text-gray-800 dark:text-white touch-manipulation active:scale-95 relative z-above">
               <LogOut className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
               <span className="text-xs sm:text-sm">Sign Out</span>
             </Button>
           </div>
         </div>
 
+        {/* Stats Cards Grid */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
-          <Card className="bg-white/30 dark:bg-black/30 backdrop-blur-xl border border-white/40 dark:border-white/20 shadow-lg hover:shadow-xl transition-all duration-300">
+          <Card className="bg-white/30 dark:bg-black/30 backdrop-blur-xl border border-white/40 dark:border-white/20 shadow-lg hover:shadow-xl transition-all duration-300 relative z-above">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-xs sm:text-sm font-medium text-gray-900 dark:text-white">Total Goal</CardTitle>
               <Target className="h-3 w-3 sm:h-4 sm:w-4 text-gray-600 dark:text-gray-400" />
@@ -319,8 +296,7 @@ export default function TimeTracker() {
               <div className="text-lg sm:text-2xl font-bold text-gray-900 dark:text-white">{totalGoal}h</div>
             </CardContent>
           </Card>
-
-          <Card className="bg-white/30 dark:bg-black/30 backdrop-blur-xl border border-white/40 dark:border-white/20 shadow-lg hover:shadow-xl transition-all duration-300">
+          <Card className="bg-white/30 dark:bg-black/30 backdrop-blur-xl border border-white/40 dark:border-white/20 shadow-lg hover:shadow-xl transition-all duration-300 relative z-above">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-xs sm:text-sm font-medium text-gray-900 dark:text-white">Hours Logged</CardTitle>
               <Clock className="h-3 w-3 sm:h-4 sm:w-4 text-gray-600 dark:text-gray-400" />
@@ -329,8 +305,7 @@ export default function TimeTracker() {
               <div className="text-lg sm:text-2xl font-bold text-blue-600 dark:text-blue-400">{totalHoursLogged}h</div>
             </CardContent>
           </Card>
-
-          <Card className="bg-white/30 dark:bg-black/30 backdrop-blur-xl border border-white/40 dark:border-white/20 shadow-lg hover:shadow-xl transition-all duration-300">
+          <Card className="bg-white/30 dark:bg-black/30 backdrop-blur-xl border border-white/40 dark:border-white/20 shadow-lg hover:shadow-xl transition-all duration-300 relative z-above">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-xs sm:text-sm font-medium text-gray-900 dark:text-white">Remaining</CardTitle>
               <TrendingUp className="h-3 w-3 sm:h-4 sm:w-4 text-gray-600 dark:text-gray-400" />
@@ -339,8 +314,7 @@ export default function TimeTracker() {
               <div className="text-lg sm:text-2xl font-bold text-gray-900 dark:text-white">{remainingHours}h</div>
             </CardContent>
           </Card>
-
-          <Card className="bg-white/30 dark:bg-black/30 backdrop-blur-xl border border-white/40 dark:border-white/20 shadow-lg hover:shadow-xl transition-all duration-300">
+          <Card className="bg-white/30 dark:bg-black/30 backdrop-blur-xl border border-white/40 dark:border-white/20 shadow-lg hover:shadow-xl transition-all duration-300 relative z-above">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-xs sm:text-sm font-medium text-gray-900 dark:text-white">Progress</CardTitle>
               <Calendar className="h-3 w-3 sm:h-4 sm:w-4 text-gray-600 dark:text-gray-400" />
@@ -351,7 +325,8 @@ export default function TimeTracker() {
           </Card>
         </div>
 
-        <Card className="bg-white/30 dark:bg-black/30 backdrop-blur-xl border border-white/40 dark:border-white/20 shadow-lg">
+        {/* Progress Card */}
+        <Card className="bg-white/30 dark:bg-black/30 backdrop-blur-xl border border-white/40 dark:border-white/20 shadow-lg relative z-above">
           <CardHeader>
             <CardTitle className="text-gray-900 dark:text-white">Overall Progress</CardTitle>
           </CardHeader>
@@ -363,7 +338,8 @@ export default function TimeTracker() {
           </CardContent>
         </Card>
 
-        <Card className="bg-white/30 dark:bg-black/30 backdrop-blur-xl border border-white/40 dark:border-white/20 shadow-lg">
+        {/* Time Tracking Overview Table */}
+        <Card className="bg-white/30 dark:bg-black/30 backdrop-blur-xl border border-white/40 dark:border-white/20 shadow-lg relative z-above">
           <CardHeader>
             <CardTitle className="text-gray-900 dark:text-white">Time Tracking Overview</CardTitle>
           </CardHeader>
@@ -387,7 +363,6 @@ export default function TimeTracker() {
                     .map((log, index) => {
                       const neededHours = log.neededHours
                       const hasOvertime = neededHours && neededHours > 0 && log.hours > neededHours
-                      
                       return (
                         <tr key={index} className="border-b border-white/20 dark:border-white/10 hover:bg-white/20 dark:hover:bg-white/10 transition-colors duration-200">
                           <td className="p-2 text-gray-900 dark:text-white">
@@ -409,8 +384,8 @@ export default function TimeTracker() {
                           </td>
                           <td className="p-2">
                             <span className={`px-2 py-1 rounded-md text-xs font-medium backdrop-blur-sm ${
-                              hasOvertime 
-                                ? 'bg-orange-100/60 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400' 
+                              hasOvertime
+                                ? 'bg-orange-100/60 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400'
                                 : 'bg-green-100/60 text-green-800 dark:bg-green-900/30 dark:text-green-400'
                             }`}>
                               {hasOvertime ? 'Overtime' : 'Normal'}
@@ -480,7 +455,8 @@ export default function TimeTracker() {
           </CardContent>
         </Card>
 
-        <Card className="bg-white/30 dark:bg-black/30 backdrop-blur-xl border border-white/40 dark:border-white/20 shadow-lg">
+        {/* Overtime Hours Summary Table */}
+        <Card className="bg-white/30 dark:bg-black/30 backdrop-blur-xl border border-white/40 dark:border-white/20 shadow-lg relative z-above">
           <CardHeader>
             <CardTitle className="text-gray-900 dark:text-white">Overtime Hours Summary</CardTitle>
           </CardHeader>
@@ -504,10 +480,8 @@ export default function TimeTracker() {
                     })
                     .sort((a, b) => new Date(b.date) - new Date(a.date))
                     .map((log, index) => {
-                      // Calculate overtime: hours worked - needed hours (same as preview)
                       const neededHours = log.neededHours || 0
                       const overtime = log.hours - neededHours
-                      
                       return (
                         <tr key={index} className="border-b border-white/20 dark:border-white/10 hover:bg-orange-50/40 dark:hover:bg-orange-900/20 transition-colors duration-200">
                           <td className="p-2 text-gray-900 dark:text-white font-medium">
@@ -578,8 +552,10 @@ export default function TimeTracker() {
           </CardContent>
         </Card>
 
+        {/* Main Content Grid */}
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 lg:gap-6">
-          <Card className="bg-white/30 dark:bg-black/30 backdrop-blur-xl border border-white/40 dark:border-white/20 shadow-lg order-2 xl:order-1">
+          {/* Log Hours Card */}
+          <Card className="bg-white/30 dark:bg-black/30 backdrop-blur-xl border border-white/40 dark:border-white/20 shadow-lg order-2 xl:order-1 relative z-above">
             <CardHeader>
               <CardTitle className="text-gray-900 dark:text-white">
                 Log Hours for {formatSelectedDate(selectedDate)}
@@ -608,8 +584,6 @@ export default function TimeTracker() {
                   )}
                 </div>
               )}
-
-              {/* Live preview for current inputs */}
               {(todayHours || timeNeededToRender) && (
                 <div className="p-3 bg-blue-50/60 dark:bg-blue-900/40 backdrop-blur-sm rounded-lg border border-blue-200/40 dark:border-blue-800/30">
                   <p className="text-sm text-blue-700 dark:text-blue-300 font-medium mb-2">Preview:</p>
@@ -635,50 +609,22 @@ export default function TimeTracker() {
                   </div>
                 </div>
               )}
-
               <div className="space-y-2">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                   <Label htmlFor="hours" className="text-gray-900 dark:text-white">
                     Hours worked on {formatSelectedDate(selectedDate)}
                   </Label>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={() => setUseTimeInput(!useTimeInput)}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setIsTimeModalOpen(true)}
                     className="text-xs bg-white/30 dark:bg-black/30 backdrop-blur-sm border-white/40 dark:border-white/20 hover:bg-white/40 dark:hover:bg-black/40 text-gray-800 dark:text-white touch-manipulation active:scale-95 self-start sm:self-auto"
                   >
-                    {useTimeInput ? "Manual Hours" : "Time Range"}
+                    Time Range
                   </Button>
                 </div>
-                
-                {useTimeInput ? (
-                  <div className="space-y-3">
-                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-2">
-                      <div className="flex-1 min-w-0">
-                        <IOSTimePicker
-                          label="Start Time"
-                          value={startTime}
-                          onChange={(value) => handleTimeChange('start', value)}
-                        />
-                      </div>
 
-                      <div className="text-gray-900 dark:text-white font-medium px-2 text-center sm:text-left">To</div>
-
-                      <div className="flex-1 min-w-0">
-                        <IOSTimePicker
-                          label="End Time"
-                          value={endTime}
-                          onChange={(value) => handleTimeChange('end', value)}
-                        />
-                      </div>
-                    </div>
-                    {startTime && endTime && (
-                      <div className="text-sm text-green-600 dark:text-green-400 font-medium text-center sm:text-left">
-                        Calculated: {todayHours}h
-                      </div>
-                    )}
-                  </div>
-                ) : (
+                {!useTimeInput && (
                   <Input
                     id="hours"
                     type="number"
@@ -692,7 +638,6 @@ export default function TimeTracker() {
                   />
                 )}
               </div>
-
               <div className="space-y-2">
                 <Label htmlFor="neededHours" className="text-gray-900 dark:text-white">
                   Time needed to render (hours)
@@ -712,11 +657,9 @@ export default function TimeTracker() {
                   Hours beyond this will count as overtime
                 </p>
               </div>
-
               <Button onClick={addSelectedDateHours} className="w-full bg-blue-500/80 hover:bg-blue-600/80 backdrop-blur-sm border border-blue-400/40 text-white shadow-lg" disabled={saving}>
                 {saving ? "Saving..." : selectedDateLog ? `Update ${formatSelectedDate(selectedDate)}` : "Log Hours"}
               </Button>
-
               <div className="space-y-2">
                 <Label htmlFor="goal" className="text-gray-900 dark:text-white">
                   Total Goal (hours)
@@ -726,18 +669,19 @@ export default function TimeTracker() {
             </CardContent>
           </Card>
 
-          <Card className="bg-white/30 dark:bg-black/30 backdrop-blur-xl border border-white/40 dark:border-white/20 shadow-lg order-1 xl:order-2">
+          {/* Calendar Card */}
+          <Card className="bg-white/30 dark:bg-black/30 backdrop-blur-xl border border-white/40 dark:border-white/20 shadow-lg order-1 xl:order-2 relative z-above">
             <CardHeader>
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0">
                 <CardTitle className="text-gray-900 dark:text-white text-center sm:text-left">Calendar View</CardTitle>
                 <div className="flex items-center justify-center space-x-2">
-                  <Button variant="outline" size="sm" onClick={() => navigateMonth("prev")} className="bg-white/30 dark:bg-black/30 backdrop-blur-sm border-white/40 dark:border-white/20 hover:bg-white/40 dark:hover:bg-black/40 text-gray-800 dark:text-white touch-manipulation active:scale-95">
+                  <Button variant="outline" size="sm" onClick={() => navigateMonth("prev")} className="bg-white/30 dark:bg-black/30 backdrop-blur-sm border-white/40 dark:border-white/20 hover:bg-white/40 dark:hover:bg-black/40 text-gray-800 dark:text-white touch-manipulation active:scale-95 relative z-above">
                     ←
                   </Button>
                   <span className="text-sm font-medium text-gray-900 dark:text-white min-w-[140px] text-center">
-                    {currentMonth.toLocaleDateString("en-US", { month: "long", year: "numeric" })}
+                    {currentMonth.toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "Asia/Manila" })}
                   </span>
-                  <Button variant="outline" size="sm" onClick={() => navigateMonth("next")} className="bg-white/30 dark:bg-black/30 backdrop-blur-sm border-white/40 dark:border-white/20 hover:bg-white/40 dark:hover:bg-black/40 text-gray-800 dark:text-white touch-manipulation active:scale-95">
+                  <Button variant="outline" size="sm" onClick={() => navigateMonth("next")} className="bg-white/30 dark:bg-black/30 backdrop-blur-sm border-white/40 dark:border-white/20 hover:bg-white/40 dark:hover:bg-black/40 text-gray-800 dark:text-white touch-manipulation active:scale-95 relative z-above">
                     →
                   </Button>
                 </div>
@@ -748,39 +692,38 @@ export default function TimeTracker() {
                 {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((day) => (
                   <div
                     key={day}
-                    className="text-center text-xs sm:text-sm font-semibold text-gray-900 dark:text-white p-1 sm:p-2 bg-white/20 dark:bg-black/20 backdrop-blur-sm rounded-md border border-white/30 dark:border-white/10"
+                    className="text-center text-xs sm:text-sm font-semibold text-gray-900 dark:text-white p-1 sm:p-2 bg-white/20 dark:bg-black/20 backdrop-blur-sm rounded-md border border-white/30 dark:border-white/10 relative z-above"
                   >
                     <span className="hidden sm:inline">{day}</span>
                     <span className="sm:hidden">{day.slice(0, 1)}</span>
                   </div>
                 ))}
               </div>
-
               <div className="grid grid-cols-7 gap-1">
                 {calendarDays.map((day, index) => (
                   <div
                     key={index}
                     onClick={() => handleDateClick(day.dateStr, day.isCurrentMonth)}
                     className={`
-                      aspect-square p-1 text-xs rounded-lg border transition-all duration-200 cursor-pointer relative backdrop-blur-sm touch-manipulation active:scale-95
+                      aspect-square p-1 text-xs rounded-lg border transition-all duration-200 cursor-pointer relative backdrop-blur-sm touch-manipulation active:scale-95 z-above hover:z-modal
                       ${day.isCurrentMonth ? "bg-white/20 dark:bg-black/20 hover:bg-white/30 dark:hover:bg-black/30" : "bg-gray-300/30 dark:bg-gray-700/30 cursor-not-allowed"}
                       ${day.isToday ? "ring-2 ring-blue-400 ring-offset-1" : ""}
-                      ${day.isSelected ? "bg-purple-200/70 text-purple-900 border-purple-400 shadow-md scale-105" : ""}
+                      ${day.isSelected ? "bg-purple-200/70 text-purple-900 border-purple-400 shadow-md scale-105 z-modal" : ""}
                       ${day.hours > 0 && !day.isSelected ? "bg-blue-100/40 dark:bg-blue-900/30 border-blue-300/50 dark:border-blue-700/50" : "border-white/30 dark:border-white/10"}
                     `}
                   >
                     {day.isSelected && (
-                      <div className="absolute top-0.5 right-0.5">
-                        <svg 
-                          className="w-2 h-2 sm:w-2.5 sm:h-2.5 text-purple-600" 
-                          fill="currentColor" 
+                      <div className="absolute top-0.5 right-0.5 z-above">
+                        <svg
+                          className="w-2 h-2 sm:w-2.5 sm:h-2.5 text-purple-600"
+                          fill="currentColor"
                           viewBox="0 0 20 20"
                         >
                           <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
                         </svg>
                       </div>
                     )}
-                    <div className="h-full flex flex-col items-center justify-center">
+                    <div className="h-full flex flex-col items-center justify-center relative z-above">
                       <span
                         className={`${day.isCurrentMonth ? "text-gray-900 dark:text-white" : "text-gray-500 dark:text-gray-400"} ${day.isSelected ? "font-bold" : ""}`}
                       >
@@ -797,7 +740,6 @@ export default function TimeTracker() {
                   </div>
                 ))}
               </div>
-
               <p className="text-xs text-gray-600 dark:text-gray-400 mt-3 text-center">
                 Tap any date to log or update hours for that day
               </p>
@@ -805,6 +747,77 @@ export default function TimeTracker() {
           </Card>
         </div>
       </div>
+
+      {/* Time Selection Modal */}
+      {isTimeModalOpen && (
+        <div className="fixed inset-0 z-modal bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white/90 dark:bg-black/90 backdrop-blur-xl rounded-2xl shadow-2xl w-full max-w-lg max-h-[95vh] flex flex-col">
+            {/* Fixed Header */}
+            <div className="flex justify-between items-center p-6 pb-4 border-b border-white/20 dark:border-white/10 flex-shrink-0">
+              <h3 className="text-lg font-bold text-gray-900 dark:text-white">Select Time Range</h3>
+              {startTime && endTime && (
+                  <span className="font-bold">Calculated: {todayHours}h</span>
+                )}
+              <button
+                onClick={() => setIsTimeModalOpen(false)}
+                className="p-2 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            
+            {/* Scrollable Content */}
+            <div className="flex-1 overflow-y-auto p-6 pt-4">
+              <div className="space-y-4">
+                <div className="bg-gradient-to-br from-blue-50/50 to-purple-50/30 dark:from-blue-900/20 dark:to-purple-900/20 backdrop-blur-sm rounded-xl p-4 border border-blue-200/40 dark:border-blue-800/30 shadow-lg">
+                  <div className="flex flex-col space-y-4">
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs font-semibold text-blue-600 dark:text-blue-400 mb-2 uppercase tracking-wider flex items-center">
+                        <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
+                        </svg>
+                        Start Time
+                      </div>
+                      <IOSTimePicker
+                        label="Start Time"
+                        value={startTime}
+                        onChange={(value) => handleTimeChange('start', value)}
+                      />
+                    </div>
+                    
+                    <div className="flex items-center justify-center py-2">
+                      <div className="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-3 py-2 rounded-full text-xs font-bold shadow-lg flex items-center space-x-1">
+                        <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M12.293 5.293a1 1 0 011.414 0l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-2.293-2.293a1 1 0 010-1.414z" clipRule="evenodd" />
+                        </svg>
+                        <span>TO</span>
+                      </div>
+                    </div>
+                    
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs font-semibold text-purple-600 dark:text-purple-400 mb-2 uppercase tracking-wider flex items-center">
+                        <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
+                        </svg>
+                        End Time
+                      </div>
+                      <IOSTimePicker
+                        label="End Time"
+                        value={endTime}
+                        onChange={(value) => handleTimeChange('end', value)}
+                      />
+                    </div>
+                  </div>
+                </div>
+                
+                
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
