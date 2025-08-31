@@ -174,27 +174,67 @@ export default function TimeTracker() {
 
   const calculateHoursFromTime = (start, end) => {
     if (!start || !end) return ""
-    const [startHour, startMin] = start.split(':').map(Number)
-    const [endHour, endMin] = end.split(':').map(Number)
-    let startMinutes = startHour * 60 + startMin
-    let endMinutes = endHour * 60 + endMin
-    if (endMinutes < startMinutes) {
-      endMinutes += 24 * 60
+
+    const toMinutes = (str) => {
+      if (!str || typeof str !== "string") return null
+      const s = str.trim()
+      // 12-hour format: h:mm AM/PM
+      const m12 = s.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i)
+      if (m12) {
+        let h = parseInt(m12[1], 10)
+        const min = parseInt(m12[2], 10)
+        const period = m12[3].toUpperCase()
+        if (period === "AM") {
+          if (h === 12) h = 0
+        } else {
+          if (h !== 12) h += 12
+        }
+        return h * 60 + min
+      }
+      // 24-hour format: HH:mm
+      const m24 = s.match(/^(\d{1,2}):(\d{2})$/)
+      if (m24) {
+        const h = Math.max(0, Math.min(23, parseInt(m24[1], 10)))
+        const min = Math.max(0, Math.min(59, parseInt(m24[2], 10)))
+        return h * 60 + min
+      }
+      return null
     }
+
+    const startMinutes = toMinutes(start)
+    const endMinutesRaw = toMinutes(end)
+    if (startMinutes == null || endMinutesRaw == null) return ""
+    let endMinutes = endMinutesRaw
+    // Allow crossing midnight
+    if (endMinutes < startMinutes) endMinutes += 24 * 60
     const diffMinutes = endMinutes - startMinutes
     const hours = diffMinutes / 60
-    return Math.max(0, hours).toFixed(1)
+    // keep two decimals in state; UI will format to h m
+    return Math.max(0, hours).toFixed(2)
+  }
+
+  // Format a hours number/string into "Xh Ym" (e.g., 1.2 -> 1h 12m)
+  const formatHM = (hoursVal) => {
+    if (hoursVal == null || hoursVal === "") return "0h"
+    const n = typeof hoursVal === "number" ? hoursVal : Number.parseFloat(hoursVal)
+    if (!isFinite(n) || n <= 0) return "0h"
+    const totalMinutes = Math.round(n * 60)
+    const h = Math.floor(totalMinutes / 60)
+    const m = totalMinutes % 60
+    if (m === 0) return `${h}h`
+    if (h === 0) return `${m}m`
+    return `${h}h ${m}m`
   }
 
   const handleTimeChange = (type, value) => {
     if (type === 'start') {
       setStartTime(value)
       const calculatedHours = calculateHoursFromTime(value, endTime)
-      if (calculatedHours) setTodayHours(calculatedHours)
+      setTodayHours(calculatedHours)
     } else {
       setEndTime(value)
       const calculatedHours = calculateHoursFromTime(startTime, value)
-      if (calculatedHours) setTodayHours(calculatedHours)
+      setTodayHours(calculatedHours)
     }
   }
 
@@ -293,7 +333,7 @@ export default function TimeTracker() {
               <Target className="h-3 w-3 sm:h-4 sm:w-4 text-gray-600 dark:text-gray-400" />
             </CardHeader>
             <CardContent>
-              <div className="text-lg sm:text-2xl font-bold text-gray-900 dark:text-white">{totalGoal}h</div>
+              <div className="text-lg sm:text-2xl font-bold text-gray-900 dark:text-white">{formatHM(totalGoal)}</div>
             </CardContent>
           </Card>
           <Card className="bg-white/30 dark:bg-black/30 backdrop-blur-xl border border-white/40 dark:border-white/20 shadow-lg hover:shadow-xl transition-all duration-300 relative z-above">
@@ -302,7 +342,7 @@ export default function TimeTracker() {
               <Clock className="h-3 w-3 sm:h-4 sm:w-4 text-gray-600 dark:text-gray-400" />
             </CardHeader>
             <CardContent>
-              <div className="text-lg sm:text-2xl font-bold text-blue-600 dark:text-blue-400">{totalHoursLogged}h</div>
+              <div className="text-lg sm:text-2xl font-bold text-blue-600 dark:text-blue-400">{formatHM(totalHoursLogged)}</div>
             </CardContent>
           </Card>
           <Card className="bg-white/30 dark:bg-black/30 backdrop-blur-xl border border-white/40 dark:border-white/20 shadow-lg hover:shadow-xl transition-all duration-300 relative z-above">
@@ -311,7 +351,7 @@ export default function TimeTracker() {
               <TrendingUp className="h-3 w-3 sm:h-4 sm:w-4 text-gray-600 dark:text-gray-400" />
             </CardHeader>
             <CardContent>
-              <div className="text-lg sm:text-2xl font-bold text-gray-900 dark:text-white">{remainingHours}h</div>
+              <div className="text-lg sm:text-2xl font-bold text-gray-900 dark:text-white">{formatHM(remainingHours)}</div>
             </CardContent>
           </Card>
           <Card className="bg-white/30 dark:bg-black/30 backdrop-blur-xl border border-white/40 dark:border-white/20 shadow-lg hover:shadow-xl transition-all duration-300 relative z-above">
@@ -333,7 +373,7 @@ export default function TimeTracker() {
           <CardContent>
             <Progress value={progressPercentage} className="w-full" />
             <p className="text-sm text-gray-700 dark:text-gray-300 mt-2">
-              {totalHoursLogged} of {totalGoal} hours completed
+              {formatHM(totalHoursLogged)} of {formatHM(totalGoal)} completed
             </p>
           </CardContent>
         </Card>
@@ -369,16 +409,16 @@ export default function TimeTracker() {
                             {formatSelectedDate(log.date)}
                           </td>
                           <td className="p-2 text-gray-900 dark:text-white font-medium">
-                            {log.hours}h
+                            {formatHM(log.hours)}
                           </td>
                           <td className="p-2 text-gray-700 dark:text-gray-300">
-                            {log.neededHours ? `${log.neededHours}h` : '-'}
+                            {log.neededHours ? formatHM(log.neededHours) : '-'}
                           </td>
                           <td className="p-2">
                             <span className={`font-medium ${hasOvertime ? 'text-orange-500' : 'text-gray-500 dark:text-gray-400'}`}>
                               {hasOvertime ? (() => {
                                 const ot = log.hours - log.neededHours
-                                return ot % 1 === 0 ? `${ot}h OT` : `${ot.toFixed(1)}h OT`
+                                return `${formatHM(ot)} OT`
                               })() : (log.neededHours ? '0h OT' : '-')}
                             </span>
                           </td>
@@ -417,7 +457,7 @@ export default function TimeTracker() {
                           const overtime = log.hours - neededHours
                           return total + Math.max(0, overtime)
                         }, 0)
-                        return totalOT % 1 === 0 ? `${totalOT}h OT` : `${totalOT.toFixed(1)}h OT`
+                        return `${formatHM(totalOT)} OT`
                       })()}
                     </span>
                   </div>
@@ -445,7 +485,7 @@ export default function TimeTracker() {
                           return total + Math.max(0, overtime)
                         }, 0)
                         const avgOT = totalOT / workingDays
-                        return avgOT % 1 === 0 ? `${avgOT}h` : `${avgOT.toFixed(1)}h`
+                        return formatHM(avgOT)
                       })()}
                     </span>
                   </div>
@@ -488,7 +528,7 @@ export default function TimeTracker() {
                             {formatSelectedDate(log.date)}
                           </td>
                           <td className="p-2 text-orange-500 font-bold text-lg">
-                            {overtime % 1 === 0 ? `${overtime}h OT` : `${overtime.toFixed(1)}h OT`}
+                            {`${formatHM(overtime)} OT`}
                           </td>
                           <td className="p-2">
                             <span className="px-2 py-1 rounded-md text-xs font-medium bg-orange-100/60 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400 backdrop-blur-sm">
@@ -542,7 +582,7 @@ export default function TimeTracker() {
                           const overtime = Math.max(0, log.hours - neededHours)
                           return total + overtime
                         }, 0)
-                        return totalOT % 1 === 0 ? `${totalOT}h OT` : `${totalOT.toFixed(1)}h OT`
+                        return `${formatHM(totalOT)} OT`
                       })()}
                     </span>
                   </div>
@@ -565,18 +605,18 @@ export default function TimeTracker() {
               {selectedDateLog && (
                 <div className="p-3 bg-blue-100/40 dark:bg-blue-900/30 backdrop-blur-sm rounded-lg border border-blue-200/40 dark:border-blue-800/30 space-y-2">
                   <p className="text-sm text-blue-700 dark:text-blue-300 font-medium">
-                    {formatSelectedDate(selectedDate)}: {selectedDateLog.hours} hours logged
+                    {formatSelectedDate(selectedDate)}: {formatHM(selectedDateLog.hours)} logged
                   </p>
                   {selectedDateLog.neededHours && selectedDateLog.neededHours > 0 && (
                     <div className="text-xs space-y-1">
                       <p className="text-gray-700 dark:text-gray-300">
-                        Required: {selectedDateLog.neededHours}h
+                        Required: {formatHM(selectedDateLog.neededHours)}
                       </p>
                       {selectedDateLog.hours > selectedDateLog.neededHours && (
                         <p className="text-orange-500 font-medium">
                           Overtime: {(() => {
                             const ot = selectedDateLog.hours - selectedDateLog.neededHours
-                            return ot % 1 === 0 ? `${ot}h OT` : `${ot.toFixed(1)}h OT`
+                            return `${formatHM(ot)} OT`
                           })()}
                         </p>
                       )}
@@ -590,19 +630,19 @@ export default function TimeTracker() {
                   <div className="text-xs space-y-1">
                     {todayHours && (
                       <p className="text-gray-700 dark:text-gray-300">
-                        Hours to log: {todayHours}h
+                        Hours to log: {formatHM(todayHours)}
                       </p>
                     )}
                     {timeNeededToRender && (
                       <p className="text-gray-700 dark:text-gray-300">
-                        Required: {timeNeededToRender}h
+                        Required: {formatHM(timeNeededToRender)}
                       </p>
                     )}
                     {todayHours && timeNeededToRender && Number.parseFloat(todayHours) > Number.parseFloat(timeNeededToRender) && (
                       <p className="text-orange-500 font-medium">
                         Overtime: {(() => {
                           const ot = Number.parseFloat(todayHours) - Number.parseFloat(timeNeededToRender)
-                          return ot % 1 === 0 ? `${ot}h OT` : `${ot.toFixed(1)}h OT`
+                          return `${formatHM(ot)} OT`
                         })()}
                       </p>
                     )}
@@ -733,7 +773,7 @@ export default function TimeTracker() {
                         <span
                           className={`text-[9px] sm:text-[10px] font-medium ${day.isSelected ? "text-purple-600" : "text-blue-600 dark:text-blue-400"}`}
                         >
-                          {day.hours}h
+                          {formatHM(day.hours)}
                         </span>
                       )}
                     </div>
@@ -756,7 +796,7 @@ export default function TimeTracker() {
             <div className="flex justify-between items-center p-6 pb-4 border-b border-white/20 dark:border-white/10 flex-shrink-0">
               <h3 className="text-lg font-bold text-gray-900 dark:text-white">Select Time Range</h3>
               {startTime && endTime && (
-                  <span className="font-bold">Calculated: {todayHours}h</span>
+                  <span className="font-bold">Calculated: {formatHM(todayHours)}</span>
                 )}
               <button
                 onClick={() => setIsTimeModalOpen(false)}
@@ -783,6 +823,7 @@ export default function TimeTracker() {
                       <IOSTimePicker
                         label="Start Time"
                         value={startTime}
+                        hideActions
                         onChange={(value) => handleTimeChange('start', value)}
                       />
                     </div>
@@ -806,13 +847,33 @@ export default function TimeTracker() {
                       <IOSTimePicker
                         label="End Time"
                         value={endTime}
+                        hideActions
                         onChange={(value) => handleTimeChange('end', value)}
                       />
                     </div>
                   </div>
                 </div>
-                
-                
+                {/* Modal actions */}
+                <div className="mt-6 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsTimeModalOpen(false)}
+                    className="flex-1 rounded-md border px-3 py-2 text-sm hover:bg-accent"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const calculated = calculateHoursFromTime(startTime, endTime)
+                      setTodayHours(calculated)
+                      setIsTimeModalOpen(false)
+                    }}
+                    className="flex-1 rounded-md bg-primary px-3 py-2 text-sm text-primary-foreground hover:opacity-90"
+                  >
+                    Done
+                  </button>
+                </div>
               </div>
             </div>
           </div>
