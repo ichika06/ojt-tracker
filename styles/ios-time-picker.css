@@ -1,0 +1,26 @@
+/* ios-time-picker.css: Custom styles for MUI time picker toolbar */
+
+.MuiPickersToolbar-root,
+.MuiTimePickerToolbar-root,
+.MuiPickersLayout-toolbar,
+.MuiPickersToolbar-root.MuiTimePickerToolbar-root,
+.MuiPickersToolbar-root.MuiTimePickerToolbar-root.MuiPickersLayout-toolbar,
+.css-tehm2a-MuiPickersToolbar-root-MuiTimePickerToolbar-root {
+  border-top-left-radius: 1rem !important;
+  border-top-right-radius: 1rem !important;
+}
+
+/* Optional: Add shadow and background for a more iOS look */
+.MuiPickersToolbar-root {
+  background: rgba(255,255,255,0.85);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+}
+
+/* Responsive adjustments for mobile */
+@media (max-width: 600px) {
+  .MuiPickersToolbar-root {
+    border-top-left-radius: 0.75rem !important;
+    border-top-right-radius: 0.75rem !important;
+    font-size: 0.95rem !important;
+  }
+}

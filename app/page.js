@@ -1,5 +1,6 @@
 "use client"
 import { useState, useEffect } from "react"
+// Importing necessary components
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -8,6 +9,7 @@ import { Progress } from "@/components/ui/progress"
 import { Calendar, Clock, Target, TrendingUp, LogOut, Sun, Moon } from "lucide-react"
 import AuthForm from "@/components/auth-form"
 import IOSTimePicker from "@/components/ios-time-picker"
+// Importing authentication and firestore functions
 import { onAuthStateChange, logOut } from "@/lib/auth"
 import { saveTimeLog, saveGoal, subscribeToTimeLogs, subscribeToUserGoal } from "@/lib/firestore"
 
@@ -18,6 +20,14 @@ export default function TimeTracker() {
   const [totalGoal, setTotalGoal] = useState(486)
   const [dailyLogs, setDailyLogs] = useState([])
   const [todayHours, setTodayHours] = useState("")
+  // Always keep todayHours as a string for input value
+  const setTodayHoursSafe = (val) => {
+    if (val == null || val === undefined) {
+      setTodayHours("")
+    } else {
+      setTodayHours(val.toString())
+    }
+  }
   const [timeNeededToRender, setTimeNeededToRender] = useState("")
   const [currentMonth, setCurrentMonth] = useState(() => {
     const now = new Date()
@@ -230,11 +240,11 @@ export default function TimeTracker() {
     if (type === 'start') {
       setStartTime(value)
       const calculatedHours = calculateHoursFromTime(value, endTime)
-      setTodayHours(calculatedHours)
+  setTodayHoursSafe(calculatedHours)
     } else {
       setEndTime(value)
       const calculatedHours = calculateHoursFromTime(startTime, value)
-      setTodayHours(calculatedHours)
+  setTodayHoursSafe(calculatedHours)
     }
   }
 
@@ -664,19 +674,17 @@ export default function TimeTracker() {
                   </Button>
                 </div>
 
-                {!useTimeInput && (
-                  <Input
-                    id="hours"
-                    type="number"
-                    step="0.5"
-                    min="0"
-                    max="24"
-                    value={todayHours}
-                    onChange={(e) => setTodayHours(e.target.value)}
-                    placeholder="Enter hours (e.g., 8.5)"
-                    className="bg-white/50 dark:bg-black/50 backdrop-blur-sm border-white/40 dark:border-white/20 focus:border-blue-400 dark:focus:border-blue-400 placeholder:text-gray-500 dark:placeholder:text-gray-400"
-                  />
-                )}
+                <Input
+                  id="hours"
+                  type="number"
+                  step="0.5"
+                  min="0"
+                  max="24"
+                  value={todayHours ?? ""}
+                  onChange={(e) => setTodayHoursSafe(e.target.value)}
+                  placeholder="Enter hours (e.g., 8.5)"
+                  className="bg-white/50 dark:bg-black/50 backdrop-blur-sm border-white/40 dark:border-white/20 focus:border-blue-400 dark:focus:border-blue-400 placeholder:text-gray-500 dark:placeholder:text-gray-400"
+                />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="neededHours" className="text-gray-900 dark:text-white">
@@ -697,9 +705,37 @@ export default function TimeTracker() {
                   Hours beyond this will count as overtime
                 </p>
               </div>
-              <Button onClick={addSelectedDateHours} className="w-full bg-blue-500/80 hover:bg-blue-600/80 backdrop-blur-sm border border-blue-400/40 text-white shadow-lg" disabled={saving}>
-                {saving ? "Saving..." : selectedDateLog ? `Update ${formatSelectedDate(selectedDate)}` : "Log Hours"}
-              </Button>
+              <div className="flex gap-2">
+                <Button onClick={addSelectedDateHours} className="flex-1 bg-blue-500/80 hover:bg-blue-600/80 backdrop-blur-sm border border-blue-400/40 text-white shadow-lg" disabled={saving}>
+                  {saving ? "Saving..." : selectedDateLog ? `Update ${formatSelectedDate(selectedDate)}` : "Log Hours"}
+                </Button>
+                {selectedDateLog && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="flex-1 bg-white/30 dark:bg-black/30 border border-white/40 dark:border-white/20 text-gray-800 dark:text-white hover:bg-white/40 dark:hover:bg-black/40"
+                    onClick={async () => {
+                      if (!user) return
+                      setSaving(true)
+                      try {
+                        // Remove from Firestore
+                        const { doc, deleteDoc } = await import("firebase/firestore")
+                        const logRef = doc(require("@/lib/firebase").db, "users", user.uid, "timeLogs", selectedDate)
+                        await deleteDoc(logRef)
+                        // Remove from local state
+                        setDailyLogs(dailyLogs.filter(log => log.date !== selectedDate))
+                        setTodayHours("")
+                        setTimeNeededToRender("")
+                      } catch (err) {
+                        console.error("Failed to clear log:", err)
+                      }
+                      setSaving(false)
+                    }}
+                  >
+                    Clear
+                  </Button>
+                )}
+              </div>
               <div className="space-y-2">
                 <Label htmlFor="goal" className="text-gray-900 dark:text-white">
                   Total Goal (hours)
@@ -811,45 +847,49 @@ export default function TimeTracker() {
             {/* Scrollable Content */}
             <div className="flex-1 overflow-y-auto p-6 pt-4">
               <div className="space-y-4">
-                <div className="bg-gradient-to-br from-blue-50/50 to-purple-50/30 dark:from-blue-900/20 dark:to-purple-900/20 backdrop-blur-sm rounded-xl p-4 border border-blue-200/40 dark:border-blue-800/30 shadow-lg">
-                  <div className="flex flex-col space-y-4">
-                    <div className="flex-1 min-w-0">
-                      <div className="text-xs font-semibold text-blue-600 dark:text-blue-400 mb-2 uppercase tracking-wider flex items-center">
+                <div className="flex flex-col space-y-4">
+                  <div className="flex-1 min-w-0 flex justify-center">
+                    <div>
+                      <div className="text-xs font-semibold text-blue-600 dark:text-blue-400 mb-2 uppercase tracking-wider flex items-center justify-center">
                         <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
                           <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
                         </svg>
                         Start Time
                       </div>
-                      <IOSTimePicker
-                        label="Start Time"
-                        value={startTime}
-                        hideActions
-                        onChange={(value) => handleTimeChange('start', value)}
-                      />
-                    </div>
-                    
-                    <div className="flex items-center justify-center py-2">
-                      <div className="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-3 py-2 rounded-full text-xs font-bold shadow-lg flex items-center space-x-1">
-                        <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd" d="M12.293 5.293a1 1 0 011.414 0l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-2.293-2.293a1 1 0 010-1.414z" clipRule="evenodd" />
-                        </svg>
-                        <span>TO</span>
+                      <div className="bg-white/80 dark:bg-black/80 rounded-xl shadow-md transition-colors duration-200">
+                        <IOSTimePicker
+                          label="Start Time"
+                          value={startTime}
+                          hideActions
+                          onChange={(value) => handleTimeChange('start', value)}
+                        />
                       </div>
                     </div>
-                    
-                    <div className="flex-1 min-w-0">
-                      <div className="text-xs font-semibold text-purple-600 dark:text-purple-400 mb-2 uppercase tracking-wider flex items-center">
-                        <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
-                        </svg>
-                        End Time
+                  </div>
+                  <div className="flex items-center justify-center py-2">
+                    <div className="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-3 py-2 rounded-full text-xs font-bold shadow-lg flex items-center space-x-1">
+                      <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M12.293 5.293a1 1 0 011.414 0l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-2.293-2.293a1 1 0 010-1.414z" clipRule="evenodd" />
+                      </svg>
+                      <span>TO</span>
+                    </div>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex justify-center">
+                      <div>
+                        <div className="text-xs font-semibold text-purple-600 dark:text-purple-400 mb-2 uppercase tracking-wider flex items-center justify-center">
+                          <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
+                          </svg>
+                          End Time
+                        </div>
+                        <IOSTimePicker
+                          label="End Time"
+                          value={endTime}
+                          hideActions
+                          onChange={(value) => handleTimeChange('end', value)}
+                        />
                       </div>
-                      <IOSTimePicker
-                        label="End Time"
-                        value={endTime}
-                        hideActions
-                        onChange={(value) => handleTimeChange('end', value)}
-                      />
                     </div>
                   </div>
                 </div>
@@ -866,7 +906,7 @@ export default function TimeTracker() {
                     type="button"
                     onClick={() => {
                       const calculated = calculateHoursFromTime(startTime, endTime)
-                      setTodayHours(calculated)
+                      setTodayHoursSafe(calculated)
                       setIsTimeModalOpen(false)
                     }}
                     className="flex-1 rounded-md bg-primary px-3 py-2 text-sm text-primary-foreground hover:opacity-90"

@@ -5,6 +5,8 @@ import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider"
 import { StaticTimePicker } from "@mui/x-date-pickers/StaticTimePicker"
 import { AdapterDateFns } from "@mui/x-date-pickers/AdapterDateFns"
 
+import "../styles/globals.css"
+import "../styles/ios-time-picker.css"
 // Static Time Picker (MUI) with the same API.
 // Props:
 // - value: string | null -> "h:mm AM/PM" (e.g., "2:05 PM")
@@ -52,6 +54,9 @@ const IOSTimePicker = ({ value, onChange, label = "Time", hideActions = false })
   const handleChange = (newVal) => {
     if (!newVal) return
     setTempDate(newVal)
+    // Immediately update parent with new time value
+    const next = format12h(newVal)
+    if (next && onChange) onChange(next)
   }
 
   const handleCancel = () => {
@@ -64,37 +69,58 @@ const IOSTimePicker = ({ value, onChange, label = "Time", hideActions = false })
   }
 
   return (
-  <div className="w-full">
-      <label className="mb-1 block text-sm text-muted-foreground">{label}</label>
+    <div className="w-full p-0 sm:p-0 ios-time-picker-mui">
+      <label className="mb-1 block text-sm sm:text-base text-muted-foreground">{label}</label>
       <LocalizationProvider dateAdapter={AdapterDateFns}>
-        <div className="rounded-xl border bg-background p-2">
-          <StaticTimePicker
-            ampm
-            value={tempDate}
-            onChange={handleChange}
-            minutesStep={1}
-            displayStaticWrapperAs="mobile"
-            slotProps={{ actionBar: { actions: [] } }}
-          />
-          {!hideActions && (
-            <div className="mt-3 flex gap-2">
-              <button
-                type="button"
-                onClick={handleCancel}
-                className="flex-1 rounded-md border px-3 py-2 text-sm hover:bg-accent"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleDone}
-                className="flex-1 rounded-md bg-primary px-3 py-2 text-sm text-primary-foreground hover:opacity-90"
-              >
-                Done
-              </button>
-            </div>
-          )}
+        <div>
+          <div className=" rounded-xl shadow-md transition-colors duration-200">
+            <StaticTimePicker
+              ampm
+              value={tempDate}
+              onChange={handleChange}
+              minutesStep={1}
+              displayStaticWrapperAs="mobile"
+              slotProps={{
+                actionBar: { actions: [] },
+                toolbar: { sx: { fontSize: { xs: '0.9rem', sm: '1.15rem', md: '1.25rem' } } },
+                tabs: { sx: { fontSize: { xs: '0.8rem', sm: '1rem', md: '1.1rem' } } },
+                clock: {
+                  sx: {
+                    fontSize: { xs: '1.1rem', sm: '1.5rem', md: '2rem' },
+                    width: { xs: 220, sm: 260, md: 320 },
+                    height: { xs: 220, sm: 260, md: 320 },
+                    maxWidth: '100%',
+                    margin: '0 auto',
+                  },
+                },
+              }}
+              sx={{
+                width: { xs: '100%', sm: 340, md: 400 },
+                maxWidth: '100%',
+                minWidth: 0,
+                fontSize: { xs: '0.9rem', sm: '1.15rem', md: '1.25rem' },
+              }}
+            />
+          </div>
         </div>
+        {!hideActions && (
+          <div className="mt-3 flex flex-col sm:flex-row gap-2">
+            <button
+              type="button"
+              onClick={handleCancel}
+              className="flex-1 rounded-md border px-4 py-3 text-base sm:text-sm hover:bg-accent active:scale-95 touch-manipulation"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleDone}
+              className="flex-1 rounded-md bg-primary px-4 py-3 text-base sm:text-sm text-primary-foreground hover:opacity-90 active:scale-95 touch-manipulation"
+            >
+              Done
+            </button>
+          </div>
+        )}
       </LocalizationProvider>
     </div>
   )
